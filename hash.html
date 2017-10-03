@@ -1,0 +1,64 @@
+<!DOCTYPE HTML>
+<head>
+	<title>
+		CS558 Web Fingerprinting Project
+	</title>
+</head>
+
+<body>
+	<h2>
+		CS558 Web Fingerprinting Project
+	</h2>
+	<h3>
+		Group Members:
+	</h3>
+	<p>
+		Ken Carlson
+		<br />
+		Zhanna Kaufman
+		<br />
+		Jonny Morse
+	</p>
+	<br />
+	<h3>
+		Description:
+	</h3>
+	<p>
+		This site generates a persistent user identifier hash for each browser to access the site.
+	</p>
+	<h3>
+		Your Unique User IDentifier (UUID) is: 
+		<!--JavaScript to Generate Hash Goes Here-->
+	<script type="text/javascript">
+		function createFingerPrint()
+		{
+			// Time Zone
+			att1 = timezone
+			// Platform 
+			att2 = platform
+			// Number of plugins
+			att3 = pluginsLength
+			// Cookies enabled 
+			att4 = cookies
+			// Browser Concurrencey 
+			att5 = navigator.hardwareConcurrency
+			// Browser Code Name
+			att6 = navigator.appCodeName
+			// Broswer Name
+			att7 = navigator.appName
+			// Browser Version
+			att8 = navigator.appVersion
+			// Number of fonts 
+			att9 = fontsList.length
+
+
+			total = att1 + att2 + att3 + att4 + att5 + att6 + att7 + att8 + att9 
+			totalHash = hash_md5(total)
+			tenCharHash = totalHash.substring(totalHash)
+			document.write(tenCharHash)
+		}
+	</script>
+		
+</body>
+
+</html>
