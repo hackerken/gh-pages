@@ -1,0 +1,652 @@
+<!DOCTYPE HTML>
+<head>
+	<title>
+		CS558 Web Fingerprinting Project
+	</title>
+</head>
+<body>
+	<h2>
+		CS558 Web Fingerprinting Project
+	</h2>
+	<h3>
+		Group Members:
+	</h3>
+	<p>
+		Ken Carlson
+		<br />
+		Zhanna Kaufman
+		<br />
+		Jonny Morse
+	</p>
+	<h3>
+		Description:
+	</h3>
+	<p>
+		This site generates a persistent user identifier hash for each browser to access the site.
+	</p>
+</body>
+
+<script>
+
+//FIRST AN MD5 HASH IMPLEMENTATION
+/*
+ * A JavaScript implementation of the RSA Data Security, Inc. MD5 Message
+ * Digest Algorithm, as defined in RFC 1321.
+ * Version 2.2 Copyright (C) Paul Johnston 1999 - 2009
+ * Other contributors: Greg Holt, Andrew Kepert, Ydnar, Lostinet
+ * Distributed under the BSD License
+ * See http://pajhome.org.uk/crypt/md5 for more info.
+ */
+
+/*
+ * Configurable variables. You may need to tweak these to be compatible with
+ * the server-side, but the defaults work in most cases.
+ */
+var hexcase = 0;   /* hex output format. 0 - lowercase; 1 - uppercase        */
+var b64pad  = "";  /* base-64 pad character. "=" for strict RFC compliance   */
+
+/*
+ * These are the functions you'll usually want to call
+ * They take string arguments and return either hex or base-64 encoded strings
+ */
+function hex_md5(s)    { return rstr2hex(rstr_md5(str2rstr_utf8(s))); }
+function b64_md5(s)    { return rstr2b64(rstr_md5(str2rstr_utf8(s))); }
+function any_md5(s, e) { return rstr2any(rstr_md5(str2rstr_utf8(s)), e); }
+function hex_hmac_md5(k, d)
+  { return rstr2hex(rstr_hmac_md5(str2rstr_utf8(k), str2rstr_utf8(d))); }
+function b64_hmac_md5(k, d)
+  { return rstr2b64(rstr_hmac_md5(str2rstr_utf8(k), str2rstr_utf8(d))); }
+function any_hmac_md5(k, d, e)
+  { return rstr2any(rstr_hmac_md5(str2rstr_utf8(k), str2rstr_utf8(d)), e); }
+
+/*
+ * Perform a simple self-test to see if the VM is working
+ */
+function md5_vm_test()
+{
+  return hex_md5("abc").toLowerCase() == "900150983cd24fb0d6963f7d28e17f72";
+}
+
+/*
+ * Calculate the MD5 of a raw string
+ */
+function rstr_md5(s)
+{
+  return binl2rstr(binl_md5(rstr2binl(s), s.length * 8));
+}
+
+/*
+ * Calculate the HMAC-MD5, of a key and some data (raw strings)
+ */
+function rstr_hmac_md5(key, data)
+{
+  var bkey = rstr2binl(key);
+  if(bkey.length > 16) bkey = binl_md5(bkey, key.length * 8);
+
+  var ipad = Array(16), opad = Array(16);
+  for(var i = 0; i < 16; i++)
+  {
+    ipad[i] = bkey[i] ^ 0x36363636;
+    opad[i] = bkey[i] ^ 0x5C5C5C5C;
+  }
+
+  var hash = binl_md5(ipad.concat(rstr2binl(data)), 512 + data.length * 8);
+  return binl2rstr(binl_md5(opad.concat(hash), 512 + 128));
+}
+
+/*
+ * Convert a raw string to a hex string
+ */
+function rstr2hex(input)
+{
+  try { hexcase } catch(e) { hexcase=0; }
+  var hex_tab = hexcase ? "0123456789ABCDEF" : "0123456789abcdef";
+  var output = "";
+  var x;
+  for(var i = 0; i < input.length; i++)
+  {
+    x = input.charCodeAt(i);
+    output += hex_tab.charAt((x >>> 4) & 0x0F)
+           +  hex_tab.charAt( x        & 0x0F);
+  }
+  return output;
+}
+
+/*
+ * Convert a raw string to a base-64 string
+ */
+function rstr2b64(input)
+{
+  try { b64pad } catch(e) { b64pad=''; }
+  var tab = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  var output = "";
+  var len = input.length;
+  for(var i = 0; i < len; i += 3)
+  {
+    var triplet = (input.charCodeAt(i) << 16)
+                | (i + 1 < len ? input.charCodeAt(i+1) << 8 : 0)
+                | (i + 2 < len ? input.charCodeAt(i+2)      : 0);
+    for(var j = 0; j < 4; j++)
+    {
+      if(i * 8 + j * 6 > input.length * 8) output += b64pad;
+      else output += tab.charAt((triplet >>> 6*(3-j)) & 0x3F);
+    }
+  }
+  return output;
+}
+
+/*
+ * Convert a raw string to an arbitrary string encoding
+ */
+function rstr2any(input, encoding)
+{
+  var divisor = encoding.length;
+  var i, j, q, x, quotient;
+
+  /* Convert to an array of 16-bit big-endian values, forming the dividend */
+  var dividend = Array(Math.ceil(input.length / 2));
+  for(i = 0; i < dividend.length; i++)
+  {
+    dividend[i] = (input.charCodeAt(i * 2) << 8) | input.charCodeAt(i * 2 + 1);
+  }
+
+  /*
+   * Repeatedly perform a long division. The binary array forms the dividend,
+   * the length of the encoding is the divisor. Once computed, the quotient
+   * forms the dividend for the next step. All remainders are stored for later
+   * use.
+   */
+  var full_length = Math.ceil(input.length * 8 /
+                                    (Math.log(encoding.length) / Math.log(2)));
+  var remainders = Array(full_length);
+  for(j = 0; j < full_length; j++)
+  {
+    quotient = Array();
+    x = 0;
+    for(i = 0; i < dividend.length; i++)
+    {
+      x = (x << 16) + dividend[i];
+      q = Math.floor(x / divisor);
+      x -= q * divisor;
+      if(quotient.length > 0 || q > 0)
+        quotient[quotient.length] = q;
+    }
+    remainders[j] = x;
+    dividend = quotient;
+  }
+
+  /* Convert the remainders to the output string */
+  var output = "";
+  for(i = remainders.length - 1; i >= 0; i--)
+    output += encoding.charAt(remainders[i]);
+
+  return output;
+}
+
+/*
+ * Encode a string as utf-8.
+ * For efficiency, this assumes the input is valid utf-16.
+ */
+function str2rstr_utf8(input)
+{
+  var output = "";
+  var i = -1;
+  var x, y;
+
+  while(++i < input.length)
+  {
+    /* Decode utf-16 surrogate pairs */
+    x = input.charCodeAt(i);
+    y = i + 1 < input.length ? input.charCodeAt(i + 1) : 0;
+    if(0xD800 <= x && x <= 0xDBFF && 0xDC00 <= y && y <= 0xDFFF)
+    {
+      x = 0x10000 + ((x & 0x03FF) << 10) + (y & 0x03FF);
+      i++;
+    }
+
+    /* Encode output as utf-8 */
+    if(x <= 0x7F)
+      output += String.fromCharCode(x);
+    else if(x <= 0x7FF)
+      output += String.fromCharCode(0xC0 | ((x >>> 6 ) & 0x1F),
+                                    0x80 | ( x         & 0x3F));
+    else if(x <= 0xFFFF)
+      output += String.fromCharCode(0xE0 | ((x >>> 12) & 0x0F),
+                                    0x80 | ((x >>> 6 ) & 0x3F),
+                                    0x80 | ( x         & 0x3F));
+    else if(x <= 0x1FFFFF)
+      output += String.fromCharCode(0xF0 | ((x >>> 18) & 0x07),
+                                    0x80 | ((x >>> 12) & 0x3F),
+                                    0x80 | ((x >>> 6 ) & 0x3F),
+                                    0x80 | ( x         & 0x3F));
+  }
+  return output;
+}
+
+/*
+ * Encode a string as utf-16
+ */
+function str2rstr_utf16le(input)
+{
+  var output = "";
+  for(var i = 0; i < input.length; i++)
+    output += String.fromCharCode( input.charCodeAt(i)        & 0xFF,
+                                  (input.charCodeAt(i) >>> 8) & 0xFF);
+  return output;
+}
+
+function str2rstr_utf16be(input)
+{
+  var output = "";
+  for(var i = 0; i < input.length; i++)
+    output += String.fromCharCode((input.charCodeAt(i) >>> 8) & 0xFF,
+                                   input.charCodeAt(i)        & 0xFF);
+  return output;
+}
+
+/*
+ * Convert a raw string to an array of little-endian words
+ * Characters >255 have their high-byte silently ignored.
+ */
+function rstr2binl(input)
+{
+  var output = Array(input.length >> 2);
+  for(var i = 0; i < output.length; i++)
+    output[i] = 0;
+  for(var i = 0; i < input.length * 8; i += 8)
+    output[i>>5] |= (input.charCodeAt(i / 8) & 0xFF) << (i%32);
+  return output;
+}
+
+/*
+ * Convert an array of little-endian words to a string
+ */
+function binl2rstr(input)
+{
+  var output = "";
+  for(var i = 0; i < input.length * 32; i += 8)
+    output += String.fromCharCode((input[i>>5] >>> (i % 32)) & 0xFF);
+  return output;
+}
+
+/*
+ * Calculate the MD5 of an array of little-endian words, and a bit length.
+ */
+function binl_md5(x, len)
+{
+  /* append padding */
+  x[len >> 5] |= 0x80 << ((len) % 32);
+  x[(((len + 64) >>> 9) << 4) + 14] = len;
+
+  var a =  1732584193;
+  var b = -271733879;
+  var c = -1732584194;
+  var d =  271733878;
+
+  for(var i = 0; i < x.length; i += 16)
+  {
+    var olda = a;
+    var oldb = b;
+    var oldc = c;
+    var oldd = d;
+
+    a = md5_ff(a, b, c, d, x[i+ 0], 7 , -680876936);
+    d = md5_ff(d, a, b, c, x[i+ 1], 12, -389564586);
+    c = md5_ff(c, d, a, b, x[i+ 2], 17,  606105819);
+    b = md5_ff(b, c, d, a, x[i+ 3], 22, -1044525330);
+    a = md5_ff(a, b, c, d, x[i+ 4], 7 , -176418897);
+    d = md5_ff(d, a, b, c, x[i+ 5], 12,  1200080426);
+    c = md5_ff(c, d, a, b, x[i+ 6], 17, -1473231341);
+    b = md5_ff(b, c, d, a, x[i+ 7], 22, -45705983);
+    a = md5_ff(a, b, c, d, x[i+ 8], 7 ,  1770035416);
+    d = md5_ff(d, a, b, c, x[i+ 9], 12, -1958414417);
+    c = md5_ff(c, d, a, b, x[i+10], 17, -42063);
+    b = md5_ff(b, c, d, a, x[i+11], 22, -1990404162);
+    a = md5_ff(a, b, c, d, x[i+12], 7 ,  1804603682);
+    d = md5_ff(d, a, b, c, x[i+13], 12, -40341101);
+    c = md5_ff(c, d, a, b, x[i+14], 17, -1502002290);
+    b = md5_ff(b, c, d, a, x[i+15], 22,  1236535329);
+
+    a = md5_gg(a, b, c, d, x[i+ 1], 5 , -165796510);
+    d = md5_gg(d, a, b, c, x[i+ 6], 9 , -1069501632);
+    c = md5_gg(c, d, a, b, x[i+11], 14,  643717713);
+    b = md5_gg(b, c, d, a, x[i+ 0], 20, -373897302);
+    a = md5_gg(a, b, c, d, x[i+ 5], 5 , -701558691);
+    d = md5_gg(d, a, b, c, x[i+10], 9 ,  38016083);
+    c = md5_gg(c, d, a, b, x[i+15], 14, -660478335);
+    b = md5_gg(b, c, d, a, x[i+ 4], 20, -405537848);
+    a = md5_gg(a, b, c, d, x[i+ 9], 5 ,  568446438);
+    d = md5_gg(d, a, b, c, x[i+14], 9 , -1019803690);
+    c = md5_gg(c, d, a, b, x[i+ 3], 14, -187363961);
+    b = md5_gg(b, c, d, a, x[i+ 8], 20,  1163531501);
+    a = md5_gg(a, b, c, d, x[i+13], 5 , -1444681467);
+    d = md5_gg(d, a, b, c, x[i+ 2], 9 , -51403784);
+    c = md5_gg(c, d, a, b, x[i+ 7], 14,  1735328473);
+    b = md5_gg(b, c, d, a, x[i+12], 20, -1926607734);
+
+    a = md5_hh(a, b, c, d, x[i+ 5], 4 , -378558);
+    d = md5_hh(d, a, b, c, x[i+ 8], 11, -2022574463);
+    c = md5_hh(c, d, a, b, x[i+11], 16,  1839030562);
+    b = md5_hh(b, c, d, a, x[i+14], 23, -35309556);
+    a = md5_hh(a, b, c, d, x[i+ 1], 4 , -1530992060);
+    d = md5_hh(d, a, b, c, x[i+ 4], 11,  1272893353);
+    c = md5_hh(c, d, a, b, x[i+ 7], 16, -155497632);
+    b = md5_hh(b, c, d, a, x[i+10], 23, -1094730640);
+    a = md5_hh(a, b, c, d, x[i+13], 4 ,  681279174);
+    d = md5_hh(d, a, b, c, x[i+ 0], 11, -358537222);
+    c = md5_hh(c, d, a, b, x[i+ 3], 16, -722521979);
+    b = md5_hh(b, c, d, a, x[i+ 6], 23,  76029189);
+    a = md5_hh(a, b, c, d, x[i+ 9], 4 , -640364487);
+    d = md5_hh(d, a, b, c, x[i+12], 11, -421815835);
+    c = md5_hh(c, d, a, b, x[i+15], 16,  530742520);
+    b = md5_hh(b, c, d, a, x[i+ 2], 23, -995338651);
+
+    a = md5_ii(a, b, c, d, x[i+ 0], 6 , -198630844);
+    d = md5_ii(d, a, b, c, x[i+ 7], 10,  1126891415);
+    c = md5_ii(c, d, a, b, x[i+14], 15, -1416354905);
+    b = md5_ii(b, c, d, a, x[i+ 5], 21, -57434055);
+    a = md5_ii(a, b, c, d, x[i+12], 6 ,  1700485571);
+    d = md5_ii(d, a, b, c, x[i+ 3], 10, -1894986606);
+    c = md5_ii(c, d, a, b, x[i+10], 15, -1051523);
+    b = md5_ii(b, c, d, a, x[i+ 1], 21, -2054922799);
+    a = md5_ii(a, b, c, d, x[i+ 8], 6 ,  1873313359);
+    d = md5_ii(d, a, b, c, x[i+15], 10, -30611744);
+    c = md5_ii(c, d, a, b, x[i+ 6], 15, -1560198380);
+    b = md5_ii(b, c, d, a, x[i+13], 21,  1309151649);
+    a = md5_ii(a, b, c, d, x[i+ 4], 6 , -145523070);
+    d = md5_ii(d, a, b, c, x[i+11], 10, -1120210379);
+    c = md5_ii(c, d, a, b, x[i+ 2], 15,  718787259);
+    b = md5_ii(b, c, d, a, x[i+ 9], 21, -343485551);
+
+    a = safe_add(a, olda);
+    b = safe_add(b, oldb);
+    c = safe_add(c, oldc);
+    d = safe_add(d, oldd);
+  }
+  return Array(a, b, c, d);
+}
+
+/*
+ * These functions implement the four basic operations the algorithm uses.
+ */
+function md5_cmn(q, a, b, x, s, t)
+{
+  return safe_add(bit_rol(safe_add(safe_add(a, q), safe_add(x, t)), s),b);
+}
+function md5_ff(a, b, c, d, x, s, t)
+{
+  return md5_cmn((b & c) | ((~b) & d), a, b, x, s, t);
+}
+function md5_gg(a, b, c, d, x, s, t)
+{
+  return md5_cmn((b & d) | (c & (~d)), a, b, x, s, t);
+}
+function md5_hh(a, b, c, d, x, s, t)
+{
+  return md5_cmn(b ^ c ^ d, a, b, x, s, t);
+}
+function md5_ii(a, b, c, d, x, s, t)
+{
+  return md5_cmn(c ^ (b | (~d)), a, b, x, s, t);
+}
+
+/*
+ * Add integers, wrapping at 2^32. This uses 16-bit operations internally
+ * to work around bugs in some JS interpreters.
+ */
+function safe_add(x, y)
+{
+  var lsw = (x & 0xFFFF) + (y & 0xFFFF);
+  var msw = (x >> 16) + (y >> 16) + (lsw >> 16);
+  return (msw << 16) | (lsw & 0xFFFF);
+}
+
+/*
+ * Bitwise rotate a 32-bit number to the left.
+ */
+function bit_rol(num, cnt)
+{
+  return (num << cnt) | (num >>> (32 - cnt));
+}
+
+
+//NOW ONTO THE FINGERPRINTING
+
+//KEEP IN MIND IF AN ELEMENT CANNOT BE FOUND IT WILL BE "UNDEFINED". THIS SHOULD BE INTEGRATED INTO THE HASH FUNCTION
+
+//get screen size
+
+//screen height (part of resolution)
+var height = window.screen.height
+
+//screen width (part of resolution)
+var width = window.screen.width
+
+//screen color depth
+var colordepth = window.screen.colorDepth
+
+//screen pixel depth
+var pixeldepth = window.screen.pixelDepth
+
+//screen available height
+var availheight = window.screen.availHeight
+
+//screen available width
+var availwidth = window.screen.availWidth
+document.write("<p><h3><b>Screen Size </b></h3></p>")
+document.write("<p>\tScreen width: " + width + "</p>")
+document.write("<p>\tScreen height: " + height + "</p>")
+document.write("<p>\tScreen color depth: " + colordepth + "</p>")
+document.write("<p>\tScreen pixel depth: " + pixeldepth + "</p>")
+document.write("<p>\tAvailable Screen width: " + availwidth + "</p>")
+document.write("<p>\tAvailable Screen height: " + availheight + "</p>")
+
+//get Canvas fingerprint: TAKEN FROM https://browserleaks.com/canvas#how-does-it-work
+// Text with lowercase/uppercase/punctuation symbols
+var canvas = document.createElement('canvas');
+var ctx = canvas.getContext('2d');
+var txt = "BrowserLeaks,com <canvas> 1.0"
+ctx.textBaseline = "top"
+// The most common type
+ctx.font = "14px 'Arial'"
+ctx.textBaseline = "alphabetic"
+ctx.fillStyle = "#f60"
+ctx.fillRect(125,1,62,20)
+// Some tricks for color mixing to increase the difference in rendering
+ctx.fillStyle = "#069";
+ctx.fillText(txt, 2, 15)
+ctx.fillStyle = "rgba(102, 204, 0, 0.7)"
+ctx.fillText(txt, 4, 17)
+//THIS IS A BASE 64 ENCODED STRING OF THE BINARY IMAGE FILE. 
+var base64string = canvas.toDataURL()
+document.write("<p><h3><b>Canvas Fingerprint </b></h3></p>")
+//document.write("<p> \tCanvas Signature: " + base64string + "</p>")
+//document.write("<p> \tCanvas Signature Hash: " + hex_md5(base64string) + "</p>")
+
+//get timezone
+var currdate = new Date()
+var timezone = currdate.getTimezoneOffset()
+document.write("<p>Timezone: " + timezone + "</p>")
+
+//Get whether Do Not Track is Enabled
+var nottrack = navigator.doNotTrack
+var nottracktrue
+if (nottrack) {
+	document.write("<p>DNT Enabled</p>")
+	nottracktrue = "1"
+}
+else {
+	document.write("<p>DNT Disabled </p>")
+	nottracktrue = "0"
+}
+
+//get HTTP headers
+//var req = new XMLHttpRequest();
+//req.open('GET', document.location, false);
+//req.send(null);
+//var headers = req.getAllResponseHeaders().toLowerCase();
+//document.write("<p>HTTP headers: " + headers + "</p>")
+
+
+//var req = new XMLHttpRequest();
+//req.open('GET', document.location, false);
+//req.send(null);
+//var headers = req.getAllResponseHeaders().toLowerCase();
+
+//Supercookie test
+//document.write("<p><h3><b>Limited Supercookie test</b></h3> </p>")
+//test for local storage
+//var localstorage = window.localStorage
+//test for session storage
+//var sessionstorage = window.sessionStorage
+//var ieuserdata = window.ieuserdata
+//if (typeof(window.localStorage) !== "undefined"){
+	//document.write("<p>\tLocal storage : Yes</p>")
+//}
+//else {
+	//document.write("<p>\tLocal storage: No</p>")
+//}
+//if (typeof(window.sessionStorage) !== "undefined"){
+	//document.write("<p>\tSession storage : Yes</p>")
+//}
+//else {
+	//document.write("<p>\tSession storage: No</p>")
+//}
+//if (typeof(window.ieuserdata) !== "undefined"){
+	//document.write("<p>\tIE User Data : Yes</p>")
+//}
+//else {
+	//document.write("<p>\tIE User Data: No</p>")
+//}
+
+
+//document.write("Headers " + headers)
+
+//get language
+language = navigator.language
+document.write("<p>Language: " + language + "</p>")
+
+//get platform
+platform = navigator.platform
+document.write("<p>Platform: " + platform + "</p>")
+
+//Test whether cookies are enabled
+var cookies = navigator.cookieEnabled
+document.write("<p>Cookies Enabled:  " + cookies + "</p>")
+
+//Get user agent
+var useragent = navigator.userAgent
+document.write("<p>User Agent: " + useragent + "</p>")
+
+//get plugins
+document.write("<p><h3><b>Plugins</b></h3> </p>")
+var pluginsLength = navigator.plugins.length;
+
+document.write("<p>\tNumber of plugins: " + pluginsLength + "</p>")
+
+
+for(var i = 0; i < pluginsLength; i++) {
+	document.write("<p>\t Plugin: " + "Name: " + navigator.plugins[i].name + "; FileName: " + navigator.plugins[i].filename + "; Description: " + navigator.plugins[i].description + "; Version: " + navigator.plugins[i].version + "</p>") 
+
+}
+var hasFlash =  (typeof(window.swfobject) !== 'undefined')
+//Is flash installed?
+if (hasFlash){
+	document.write("Flash player Found")
+}
+else{
+	document.write("Flash player Not Found")
+}
+
+//Some other browser/computer info
+
+document.write("<p><h3><b>Some other info</b></h3> </p>")
+
+//get hardware concurrency 
+document.write("<p>\tBrowser Concurrency: " + navigator.hardwareConcurrency + "</p>")
+
+//get browser code name
+document.write("<p>\tBrowser code name: " + navigator.appCodeName + "</p>")
+
+//get browser name
+document.write("<p>\tBrowser name: " + navigator.appName + "</p>")
+
+//get browser version
+document.write("<p>\tBrowser version: " + navigator.appVersion + "</p>")
+
+//CHECK FOR AVAILABLE FONTS
+var Detector = function() {
+    // a font will be compared against all the three default fonts.
+    // and if it doesn't match all 3 then that font is not available.
+    var baseFonts = ['monospace', 'sans-serif', 'serif'];
+
+    //we use m or w because these two characters take up the maximum width.
+    // And we use a LLi so that the same matching fonts can get separated
+    var testString = "mmmmmmmmmmlli";
+
+    //we test using 72px font size, we may use any size. I guess larger the better.
+    var testSize = '72px';
+
+    var h = document.getElementsByTagName("body")[0];
+
+    // create a SPAN in the document to get the width of the text we use to test
+    var s = document.createElement("span");
+    s.style.fontSize = testSize;
+    s.innerHTML = testString;
+    var defaultWidth = {};
+    var defaultHeight = {};
+    for (var index in baseFonts) {
+        //get the default width for the three base fonts
+        s.style.fontFamily = baseFonts[index];
+        h.appendChild(s);
+        defaultWidth[baseFonts[index]] = s.offsetWidth; //width for the default font
+        defaultHeight[baseFonts[index]] = s.offsetHeight; //height for the defualt font
+        h.removeChild(s);
+    }
+
+    function detect(font) {
+        var detected = false;
+        for (var index in baseFonts) {
+            s.style.fontFamily = font + ',' + baseFonts[index]; // name of the font along with the base font for fallback.
+            h.appendChild(s);
+            var matched = (s.offsetWidth != defaultWidth[baseFonts[index]] || s.offsetHeight != defaultHeight[baseFonts[index]]);
+            h.removeChild(s);
+            detected = detected || matched;
+        }
+        return detected;
+    }
+
+    this.detect = detect;
+};
+
+//list of fonts
+var fontsList = ["Adobe Jenson", "Albertus", "Aldus", "Alexandria", "Algerian", "American Typewriter", "Antiqua", "Arno", "Aster", "Aurora", "Baskerville", "Bell", "Belwe Roman", "Bembo", "Berkeley Old Style", "Bernhard Modern", "Bodoni", "Book Antiqua", "Bookman", "Bulmer", "Caledonia", "Californian FB", "Calisto MT", "Cambria", "Capitals", "Cartier", "Caslon", "Caslon Antique", "Catull", "Centaur", "Century Old Style", "Century Schoolbook", "New Century Schoolbook", "Charis SIL", "Charter", "Cheltenham", "Clearface", "Cochin", "Colonna", "Computer Modern", "Concrete Roman", "Constantia", "Constructium", "Cooper Black", "Copperplate Gothic", "Corona", "DejaVu fonts", "Didot", "Droid serif", "Elephant", "Emerson", "Excelsior", "Fairfield", "FF Scala", "Footlight", "FreeSerif", "Friz Quadrata", "Garamond", "Gentium", "Georgia", "Gloucester", "Goudy Old Style", "Granjon", "High Tower Text", "Hoefler Text", "Imprint", "Ionic No. 5", "ITC Benguiat", "Janson", "Jokerman", "Joanna", "Korinna", "Lexicon", "Liberation fonts", "Linux Libertine", "Literaturnaya", "Lucida", "Melior", "Memphis", "Miller", "Minion", "Didone", "Mona Lisa", "Mrs Eaves", "MS Serif", "New York", "Macintosh", "Nimbus Roman", "NPS Rawlinson Roadway", "OCR A Extended", "Palatino", "Book Antiqua", "Perpetua", "Plantin", "Playbill", "Primer", "Renault", "Requiem", "Rotis Serif", "Sabon", "Sistina", "Souvenir", "STIX", "XITS", "Sylfaen", "Times New Roman", "Times", "Mergenthaler Linotype Company", "Times New Roman", "Torino", "Trajan", "Trinité", "Trump Mediaeval", "Utopia", "Bitstream Vera", "Wide Latin", "Windsor", "XITS", "Alexandria", "American Typewriter", "Archer", "Athens", "Candida", "Cholla Slab", "City", "Clarendon", "Concrete Roman", "Courier", "Egyptienne", "Guardian Egyptian", "Ionic No. 5", "Lexia", "Memphis", "Nilland", "Roboto Slab", "Rockwell", "Schadow", "Serifa", "Skeleton Antique", "Sreda", "Swift", "Tower", "Agency FB", "Akzidenz-Grotesk", "Andalé Sans", "Antique Olive", "Arial", "Arial Unicode MS", "ITC Avant Garde", "Avenir", "Bank Gothic", "Bauhaus", "Bell Centennial", "Bell Gothic", "Benguiat Gothic", "Berlin Sans", "Brandon Grotesque", "Calibri", "Casey", "Century Gothic", "Charcoal", "Mac OS 9", "Chicago", "Mac OS 8", "MacOS", "Clearview", "Comic Sans", "Compacta", "Corbel", "DejaVu fonts", "DIN 1451", "Dotum", "Droid fonts", "Dyslexie", "Ecofont", "Eras", "Esseltub", "Espy Sans", "Eurocrat", "Eurostile", "FF Dax", "FF Meta", "FF Scala Sans", "Fira Sans", "Folio", "Franklin Gothic", "FreeSans", "Frutiger", "Futura", "Geneva", "Macintosh", "Gill Sans", "Gill Sans Schoolbook", "Gotham", "Haettenschweiler", "Handel Gothic", "Harabara Mais", "Hei", "Helvetica", "Helvetica Neue", "Swiss 721", "Highway Gothic", "Hobo", "Impact", "Industria", "Interstate", "Johnston", "Kabel", "Klavika", "Liberation fonts", "Linux Biolinum", "Lucida", "Lucida Grande", "Lucida Sans Unicode", "Lydian", "Meiryo", "Meta", "Microgramma", "Didone", "Windows 2.1", "Motorway", "MS Sans Serif", "Microsoft Windows", "Arial", "Myriad", "Neutraface", "Neuzeit S", "News Gothic", "Nimbus Sans L", "Open Sans", "Optima", "Parisine", "RATP Group", "Paris", "Product Sans", "Proxima Nova", "PT Sans", "Russian Federation", "Rail Alphabet", "Roboto", "Rotis", "San Francisco", "IOS 9", "OS X El Capitan", "Segoe", "Skia", "QuickDraw GX", "MacOS", "Source Sans Pro", "Sweden Sans", "Syntax", "System", "Windows 3.1x", "Tahoma", "Template Gothic", "Thesis Sans", "Tiresias", "Trade Gothic", "Transport", "Trebuchet MS", "Twentieth Century", "Ubuntu", "Univers", "Zurich", "Bitstream Vera", "Verdana", "Nyala", "Rotis", "Easyreading", "3x3", "Andalé Mono", "Arial", "Bitstream Vera", "Consolas", "Courier", "Courier New", "DejaVu fonts", "Droid fonts", "Everson Mono", "Fixed", "Fixedsys", "Fixedsys Excelsior", "HyperFont", "Inconsolata", "Letter Gothic", "Liberation fonts", "Lucida", "Menlo", "Monaco", "Macintosh", "Monospace", "MS Gothic", "MS Mincho", "Nimbus Mono L", "OCR-A font", "OCR-B", "PragmataPro", "Prestige Elite", "ProFont", "Proggy programming fonts", "SimHei", "SimSun", "Source Code Pro", "Terminal", "Trixie", "Ubuntu", "Bitstream Vera", "Balloon", "Brush Script", "Choc", "Dom Casual", "Mistral", "Papyrus", "Segoe", "Utopia", "American Scribe", "AMS Euler", "Apple Chancery", "Forte", "French Script", "ITC Zapf Chancery", "Kuenstler Script", "Monotype Corsiva", "Old English Text MT", "Zapfino", "Andy", "Ashley Script", "Cézanne", "Chalkboard", "Comic Sans MS", "Dom Casual", "Kristen", "Lucida Handwriting", "Coronet", "Curlz", "Gravura", "Script typeface", "Windows 2.1", "Wiesbaden Swing", "Bastard", "Breitkopf Fraktur", "Cloister Black", "Fette Fraktur", "Fletcher", "Fraktur", "Lucida Blackletter", "Old English Text", "Schwabacher", "Aharoni", "Hebrew alphabet", "Aparajita", "Arial Unicode MS", "Calibri", "Chandas", "Devanagari", "Gadugi", "Grecs du roi", "Hanacaraka", "Javanese script", "Japanese Gothic typeface", "Jomolhari", "Tibetan script", "Kiran fonts", "Kochi font", "Koren Type", "Kruti Dev", "Malgun Gothic", "Meiryo", "Microsoft JhengHei", "Microsoft YaHei", "Minchō", "Ming", "Mona Font", "MS Gothic", "Nastaliq Navees", "Perpetua Greek", "undefined", "Porson", "Segoe UI Symbol", "Shruti", "SimSun", "Sylfaen", "Tahoma", "Tengwar", "Tibetan Machine Uni", "Wilson Greek", "Apple Symbols", "Asana-Math", "Blackboard bold", "Bookshelf Symbol 7", "Cambria Math", "Computer Modern", "Lucida", "Marlett", "Symbol", "Webdings", "Wingdings", "Wingdings 2", "Wingdings 3", "Zapf Dingbats", "Ad Lib", "Allegro", "Andreas", "Arnold Böcklin", "Astur", "Banco", "Bauhaus", "Braggadocio", "Broadway", "Caslon Antique", "Cooper Black", "Curlz", "Ellington", "Exocet", "FIG Script", "Forte", "Gabriola", "Horizon", "Jim Crow", "Lo-Type", "Neuland", "Peignot", "San Francisco", "Stencil", "Umbra", "Westminster", "Willow", "Windsor", "Compatil", "Generis", "Grasset typeface"];
+var truefonts = ""
+document.write("<p><h3><b>Available Fonts </b></h3></p>")
+d = new Detector();
+for(var i = 0; i < fontsList.length; i++) {
+	if (d.detect(fontsList[i])){
+		document.write(fontsList[i] + " ; ")
+		truefonts = truefonts + (fontsList[i] + " ; ")
+	}
+	
+}
+
+//convert base64 output of md5 function to Hexadecimal
+function base64toHEX(base64) {
+  var HEX = '';
+  for ( i = 0; i < base64.length; i++ ) {
+    var _hex = base64.charCodeAt(i).toString(16)
+    HEX += (_hex.length==2?_hex:'0'+_hex);
+  }
+  return HEX.toUpperCase();
+}
+//concatenate, hash, and take the 10-char substring of all variables
+	total = height+""+width+""+colordepth+""+pixeldepth+""+availheight+""+timezone+""+nottracktrue+""+base64string+""+language+""+platform+""+cookies.toString()+""+useragent+""+pluginsLength+""+hasFlash.toString()+""+truefonts
+	totalHashLong = base64toHEX(rstr_md5(total))
+	totalHash = totalHashLong.substring(0,10)
+	document.write("<br /> <h3><b>Your 10-digit Unique User IDentifier is: </b></h3>" + totalHash)
+
+</script>
+
+</html>
